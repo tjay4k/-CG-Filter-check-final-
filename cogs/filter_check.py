@@ -82,18 +82,20 @@ async def report_error(interaction: discord.Interaction | None, message: str, le
 async def fetch_roblox_user_data(session: aiohttp.ClientSession, username: str, interaction: discord.Interaction | None = None):
     """Fetch comprehensive Roblox user data with improved error handling and rate limiting."""
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+    user_id = None
 
     try:
-        async with session.get(f"https://api.roblox.com/users/get-by-username?username={username}", timeout=timeout) as res:
+        async with session.post(f"https://users.roblox.com/v1/usernames/users", json={"usernames": [username]}, timeout=timeout) as res:
             if res.status != 200:
                 await report_error(interaction, f"Failed to fetch user ID for Roblox username {username}: status {res.status}", level="error")
                 return None
 
             data = await res.json()
-            user_id = data.get("Id")
-            if not user_id:
-                await report_error(interaction, f"Roblox user with username {username} not found.", user_message=f"❌ Roblox user **{username}** was not found.", level="error")
+            if not data.get("data"):
+                await report_error(interaction, f"Roblox user **{username}** not found.", user_message=f"❌ Roblox user **{username}** not found.", level="error")
                 return None
+
+            user_id = data["data"][0]["id"]
 
         # Fetch basic user info
         async with session.get(f"https://users.roblox.com/v1/users/{user_id}", timeout=timeout) as res:
@@ -136,7 +138,7 @@ async def fetch_roblox_user_data(session: aiohttp.ClientSession, username: str, 
             "badge_pages": badge_pages
         }
     except asyncio.TimeoutError:
-        await report_error(interaction, f"Timeout fetching data for Roblox ID {user_id}", level="error")
+        await report_error(interaction, f"Timeout fetching data for Roblox user **{username} ({user_id})**", level="error")
         return None
     except Exception as e:
         await report_error(interaction, f"Error fetching data for Roblox ID {user_id}: {e}", level="error")
