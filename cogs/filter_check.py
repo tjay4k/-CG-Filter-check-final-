@@ -15,7 +15,11 @@ import io
 REQUEST_TIMEOUT = 1  # seconds
 BADGE_FETCH_DELAY = 0.1  # seconds
 MAX_CONCURRENT_REQUESTS = 5
-FILTER_CHANNEL_ID = 1383949901091700808  # Replace with your actual channel ID
+FILTER_CHANNEL_ID = {
+    1322753191749615626: 1383949901091700808,  # [TGR] PEACEKEEPER ACADEMY
+    1309981030790463529: 1417970716636086312  # Test server
+
+}
 MAIN_GROUP = 34755744
 MAIN_DIVISIONS = [35678586, 35536880, 34815619, 34815613, 34899357]
 SUB_DIVISIONS = [35335293, 35586073, 35250103]
@@ -375,7 +379,8 @@ class FilterCheck(commands.Cog):
 
     async def send_check_result(self, user_data: dict, reason: str, interaction: discord.Interaction | None = None):
         """Send only the failure reason to the configured channel."""
-        channel = self.bot.get_channel(FILTER_CHANNEL_ID)
+        guild_id = interaction.guild.id if interaction and interaction.guild else None
+        channel = self.bot.get_channel(FILTER_CHANNEL_ID.get(guild_id))
         if not channel:
             await report_error(interaction, f"Filter channel not found.", level="error")
             return
@@ -385,7 +390,7 @@ class FilterCheck(commands.Cog):
 
     @app_commands.command(name="check", description="Check a user's Roblox & Discord account information.")
     @app_commands.describe(roblox_username="The Roblox username to check.", discord_id="The Discord user ID to check.")
-    async def check(self, interaction: discord.Interaction, roblox_id: int, discord_id: str):
+    async def check(self, interaction: discord.Interaction, roblox_username: str, discord_id: str):
         await interaction.response.defer(ephemeral=True)
         await interaction.edit_original_response(content="⏳ Processing the check...")
 
@@ -410,7 +415,7 @@ class FilterCheck(commands.Cog):
                 return
 
             # Fetch basic roblox info
-            user_data = await fetch_roblox_user_data(session, roblox_id, interaction)
+            user_data = await fetch_roblox_user_data(session, roblox_username, interaction)
             if not user_data:
                 # await report_error(interaction, f"Failed to fetch Roblox data for ID {roblox_id}.")
                 return
@@ -433,10 +438,10 @@ class FilterCheck(commands.Cog):
                 return
 
             # Fetch user's divisions and check for any main divisions
-            main_divisions, sub_divisions, main_group, intelligence_groups = await get_user_divisions(session, roblox_id)
+            main_divisions, sub_divisions, main_group, intelligence_groups = await get_user_divisions(session, user_data['user_id'])
 
             # Fetch user's badges, check count, create the graph
-            badges, badge_count = await fetch_user_badges_with_count(session, roblox_id)
+            badges, badge_count = await fetch_user_badges_with_count(session, user_data['user_id'])
 
             if badge_count < 480:
                 await self.send_check_result(user_data, reason=f"NOT ENOUGH BADGES DETECTED ({badge_count}/480)", interaction=interaction)
@@ -476,9 +481,11 @@ class FilterCheck(commands.Cog):
                 f"Bot account: {user_info['bot']}\n"
                 f"Avatar URL: {user_info['avatar_url']}\n"
                 f"```"
+                f"\n{interaction.user.mention}"
             )
 
-            channel = self.bot.get_channel(FILTER_CHANNEL_ID)
+            guild_id = interaction.guild.id if interaction and interaction.guild else None
+            channel = self.bot.get_channel(FILTER_CHANNEL_ID.get(guild_id))
             if channel:
                 await channel.send(content=message)
                 if badge_graph:
